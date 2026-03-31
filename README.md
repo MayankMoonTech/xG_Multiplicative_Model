@@ -25,3 +25,9 @@ xG = Zone Value × Pressure Factor × Balance Factor
 
 Factors:
 Near goal → High xG  |  Far from goal → Low xG 
+
+
+Commands to be executed:
+- pip install -r requirements.txt
+- cd app
+- python app.py
