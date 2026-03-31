@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>xG Model — Expected Goals</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{
+  --bg:#0d1117; --s1:#131820; --s2:#1a2030; --s3:#212840;
+  --b1:rgba(255,255,255,0.06); --b2:rgba(255,255,255,0.12);
+  --tx:#dde4f0; --mu:#5a6480; --ac:#a8ff47;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:'DM Sans',sans-serif;font-size:14px;min-height:100vh;display:flex;flex-direction:column}
+
+/* ─ HEADER ─ */
+header{background:var(--s1);border-bottom:1px solid var(--b1);padding:14px 28px;display:flex;align-items:center;gap:14px;flex-shrink:0}
+.logo{font-family:'Bebas Neue',sans-serif;font-size:22px;letter-spacing:3px;color:var(--ac)}
+.logo-sep{width:1px;height:20px;background:var(--b2)}
+.logo-sub{font-size:12px;color:var(--mu);font-weight:300}
+.hbadge{background:rgba(168,255,71,.1);color:var(--ac);font-size:9px;font-weight:600;letter-spacing:1.2px;padding:3px 9px;border-radius:20px;border:1px solid rgba(168,255,71,.25);text-transform:uppercase;margin-left:auto}
+
+/* ─ LAYOUT ─ */
+.page{display:grid;grid-template-columns:1fr 380px;flex:1;min-height:0}
+
+/* ─ LEFT PANEL ─ */
+.left{padding:20px 24px;display:flex;flex-direction:column;gap:16px;border-right:1px solid var(--b1);overflow-y:auto}
+
+.pitch-header{display:flex;align-items:baseline;gap:10px}
+.pitch-title{font-family:'Bebas Neue',sans-serif;font-size:20px;letter-spacing:2px;color:var(--tx)}
+.pitch-sub{font-size:11px;color:var(--mu)}
+
+/* Pitch SVG wrapper */
+.pitch-wrap{border-radius:8px;overflow:hidden;border:1px solid var(--b2);background:#0a1008;position:relative}
+.pitch-svg-inner{width:100%;display:block}
+
+/* Zone legend */
+.legend{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.leg-item{display:flex;align-items:center;gap:5px;font-size:10px;color:var(--mu);cursor:pointer;padding:3px 4px;border-radius:4px;transition:background .1s}
+.leg-item:hover{background:var(--b1);color:var(--tx)}
+.leg-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+
+/* Approach section */
+.approach{background:var(--s1);border:1px solid var(--b1);border-radius:10px;overflow:hidden}
+.approach-hdr{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;user-select:none}
+.approach-hdr-title{font-size:11px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--mu)}
+.approach-toggle{font-size:11px;color:var(--mu);transition:transform .2s}
+.approach-body{padding:0 16px;max-height:0;overflow:hidden;transition:max-height .3s ease,padding .3s}
+.approach-body.open{max-height:600px;padding:0 16px 16px}
+
+.approach-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.ap-card{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:12px}
+.ap-card-title{font-size:10px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--ac);margin-bottom:6px}
+.ap-card p{font-size:11px;color:var(--mu);line-height:1.6}
+.ap-card p strong{color:var(--tx);font-weight:500}
+
+.why-list{margin-top:8px;display:flex;flex-direction:column;gap:4px}
+.why-row{font-size:11px;color:var(--mu);padding:5px 8px;background:var(--s3);border-radius:4px;line-height:1.4}
+.why-row strong{color:var(--ac)}
+
+/* ─ RIGHT PANEL ─ */
+.right{background:var(--s1);padding:20px 20px;display:flex;flex-direction:column;gap:16px;overflow-y:auto}
+
+.sec-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--mu);margin-bottom:10px}
+
+/* Input fields */
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px}
+.field label{font-size:12px;font-weight:500;color:var(--tx);display:flex;justify-content:space-between;align-items:center}
+.field label .hint{font-size:10px;color:var(--mu);font-weight:300;font-style:italic}
+.field input[type=number]{
+  background:var(--s2);border:1px solid var(--b2);border-radius:8px;
+  color:var(--tx);font-family:'DM Mono',monospace;font-size:24px;font-weight:500;
+  padding:12px 16px;width:100%;outline:none;transition:border-color .15s;
+  -moz-appearance:textfield
+}
+.field input[type=number]::-webkit-inner-spin-button,
+.field input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none}
+.field input[type=number]:focus{border-color:var(--ac)}
+.field input.ei{border-color:#ef4444!important}
+.ferr{font-size:11px;color:#ef4444;margin-top:2px}
+
+/* Quick pills */
+.pills{display:flex;gap:5px;flex-wrap:wrap;margin-top:4px}
+.pill{background:var(--s3);border:1px solid var(--b1);border-radius:5px;padding:4px 8px;font-size:10px;color:var(--mu);cursor:pointer;transition:all .12s;white-space:nowrap}
+.pill:hover{border-color:var(--b2);color:var(--tx)}
+.pill strong{font-family:'Bebas Neue',sans-serif;font-size:13px;letter-spacing:.5px;color:var(--tx);margin-right:3px}
+
+/* Submit */
+.submit{background:var(--ac);color:#0d1117;border:none;border-radius:8px;font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:2px;padding:14px;width:100%;cursor:pointer;transition:opacity .15s,transform .1s;margin-top:4px}
+.submit:hover{opacity:.88}
+.submit:active{transform:scale(.98)}
+
+/* Result */
+.result-card{background:var(--s2);border:1px solid var(--b1);border-radius:10px;padding:20px;text-align:center;position:relative;overflow:hidden}
+.result-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--rc,var(--mu));transition:background .3s}
+.xg-num{font-family:'Bebas Neue',sans-serif;font-size:80px;letter-spacing:2px;line-height:1;color:var(--rc,var(--mu));transition:color .3s}
+.xg-rating{font-size:11px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--rc,var(--mu));margin-top:4px}
+.xg-bar-bg{height:4px;background:rgba(255,255,255,.06);border-radius:2px;overflow:hidden;margin-top:14px}
+.xg-bar-fill{height:100%;border-radius:2px;background:var(--rc,var(--mu));transition:width .5s cubic-bezier(.4,0,.2,1)}
+
+/* Breakdown */
+.bk{background:var(--s2);border:1px solid var(--b1);border-radius:10px;overflow:hidden}
+.bk-row{display:grid;grid-template-columns:70px 1fr auto;gap:8px;align-items:center;padding:11px 14px;border-bottom:1px solid var(--b1)}
+.bk-row:last-child{border-bottom:none}
+.bk-tag{font-size:9px;font-weight:600;letter-spacing:.8px;text-transform:uppercase;color:var(--mu)}
+.bk-main{font-size:12px;font-weight:500;color:var(--tx)}
+.bk-sub{font-size:10px;color:var(--mu);margin-top:2px}
+.bk-val{font-family:'DM Mono',monospace;font-size:13px;color:var(--ac);font-weight:500}
+
+/* Formula */
+.formula{background:var(--bg);border:1px solid var(--b1);border-radius:7px;padding:11px 14px;font-family:'DM Mono',monospace;font-size:13px;color:var(--ac);text-align:center}
+.formula-lbl{font-family:'DM Sans',sans-serif;font-size:9px;text-transform:uppercase;letter-spacing:1.2px;color:var(--mu);margin-bottom:5px}
+
+/* History */
+.hist-list{display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto}
+.hist-row{background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;transition:border-color .12s;font-size:11px}
+.hist-row:hover{border-color:var(--b2)}
+.hist-in{color:var(--mu)}.hist-in span{color:var(--tx);font-weight:500}
+.hist-xg{font-family:'Bebas Neue',sans-serif;font-size:18px;letter-spacing:1px}
+.hist-r{font-size:9px;font-weight:600;letter-spacing:.8px;text-transform:uppercase}
+.empty{font-size:11px;color:var(--mu);font-style:italic;text-align:center;padding:12px}
+
+/* Empty state */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:6px}
+.empty-big{font-family:'Bebas Neue',sans-serif;font-size:48px;letter-spacing:3px;color:var(--s3)}
+.empty-msg{font-size:12px;color:var(--mu);text-align:center}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">xG</div>
+  <div class="logo-sep"></div>
+  <div class="logo-sub">Expected Goals Model — 21 × 17 StatsBomb Grid</div>
+</header>
+
+<div class="page">
+
+<!-- ══════════════════ LEFT PANEL ══════════════════ -->
+<div class="left">
+
+  <div class="pitch-header">
+    <div class="pitch-title">xG Geographical Zones</div>
+    <div class="pitch-sub">21 × 17 grid — Attack direction →</div>
+  </div>
+
+  <div class="pitch-wrap">
+    <svg id="pitch" class="pitch-svg-inner" viewBox="-15 -4 618 382" xmlns="http://www.w3.org/2000/svg">
+      <!-- Grid cells filled by JS -->
+      <g id="grid-cells"></g>
+      <!-- Pitch markings overlay -->
+      <g id="pitch-marks" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="1.4">
+        <!-- Pitch border -->
+        <rect x="0" y="0" width="588" height="374" stroke="rgba(255,255,255,0.5)"/>
+        <!-- Halfway line -->
+        <line x1="280" y1="0" x2="280" y2="374"/>
+        <!-- Center circle -->
+        <ellipse cx="294" cy="187" rx="49" ry="46"/>
+        <circle cx="294" cy="187" r="2.5" fill="rgba(255,255,255,0.5)" stroke="none"/>
+        <!-- RIGHT penalty area -->
+        <rect x="476" y="88" width="112" height="198" stroke="rgba(255,255,255,0.55)"/>
+        <!-- RIGHT 6-yard box -->
+        <rect x="504" y="132" width="84" height="110" stroke="rgba(255,255,255,0.55)"/>
+        <!-- RIGHT penalty spot -->
+        <circle cx="518" cy="187" r="2.5" fill="rgba(255,255,255,0.6)" stroke="none"/>
+        <!-- RIGHT penalty arc -->
+        <path d="M476,167 A49,39 0 0,0 476,207" stroke="rgba(255,255,255,0.45)"/>
+        <!-- RIGHT goal -->
+        <rect x="585" y="154" width="18" height="66" stroke="rgba(255,255,255,0.65)" stroke-width="1.8"/>
+        <!-- LEFT penalty area -->
+        <rect x="0" y="88" width="112" height="198" stroke="rgba(255,255,255,0.3)"/>
+        <!-- LEFT 6-yard box -->
+        <rect x="0" y="132" width="84" height="110" stroke="rgba(255,255,255,0.3)"/>
+        <!-- LEFT penalty spot -->
+        <circle cx="70" cy="187" r="2.5" fill="rgba(255,255,255,0.4)" stroke="none"/>
+        <!-- LEFT penalty arc -->
+        <path d="M112,150 A49,39 0 0,1 112,224" stroke="rgba(255,255,255,0.3)"/>
+        <!-- LEFT goal -->
+        <rect x="-18" y="154" width="18" height="66" stroke="rgba(255,255,255,0.4)" stroke-width="1.8"/>
+        <!-- Corner arcs -->
+        <path d="M0,0 Q6,0 6,6" stroke="rgba(255,255,255,0.35)"/>
+        <path d="M0,374 Q6,374 6,368" stroke="rgba(255,255,255,0.35)"/>
+        <path d="M588,0 Q582,0 582,6" stroke="rgba(255,255,255,0.35)"/>
+        <path d="M588,374 Q582,374 582,368" stroke="rgba(255,255,255,0.35)"/>
+      </g>
+      <!-- Zone number labels (above pitch marks) -->
+      <g id="zone-labels"></g>
+      <!-- Selected zone highlight -->
+      <g id="sel-overlay"></g>
+    </svg>
+  </div>
+
+  <!-- Zone legend -->
+  <div class="legend" id="legend"></div>
+
+  <!-- Approach / Methodology -->
+  <div class="approach">
+    <div class="approach-hdr" onclick="toggleApproach()">
+      <div class="approach-hdr-title">Approach Used &amp; Why — StatsBomb Multiplicative Model</div>
+      <div class="approach-toggle" id="ap-tog">▼</div>
+    </div>
+    <div class="approach-body" id="ap-body">
+      <div class="approach-grid">
+
+        <div class="ap-card">
+          <div class="ap-card-title">Data Source</div>
+          <p><strong>StatsBomb Open Data</strong> (github.com/statsbomb/open-data)<br>
+          ~9,800 open-play shots from La Liga, Premier League, Champions League &amp; World Cups.<br>
+          Each shot has: <strong>location (x,y)</strong>, outcome, <strong>under_pressure</strong> flag, and <strong>freeze-frame</strong> (all player positions at shot moment).</p>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-title">Step 1 — Base xG (Geography)</div>
+          <p>Map each shot's (x,y) to our 21×17 grid using:<br>
+          <strong>gx = floor(x_sb / 6)</strong><br>
+          <strong>gy = floor(y_sb / 5)</strong><br>
+          Then: <strong>base xG = goals ÷ shots</strong> in that zone.<br>
+          Zone 1 = 42% conversion. Zone 14 = 1%.</p>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-title">Step 2 — Press Multiplier</div>
+          <p>From StatsBomb <strong>under_pressure</strong> field + freeze-frame defender count.<br>
+          Free shots convert at <strong>1.35× average</strong>. Under 3+ defenders: <strong>0.52×</strong>.<br>
+          Reference: Robberechts et al. (2019) <em>Valuing on-the-ball actions</em>.</p>
+        </div>
+
+        <div class="ap-card">
+          <div class="ap-card-title">Step 3 — Balance Multiplier</div>
+          <p>From freeze-frame: count attackers with <strong>x_sb &gt; 100, 18 &lt; y_sb &lt; 62</strong> at shot moment.<br>
+          More attackers = keeper distracted, rebounds, defenders displaced.<br>
+          Reference: Spearman (2018) <em>Beyond Expected Goals</em>.</p>
+        </div>
+
+      </div>
+
+      <div class="why-list" style="margin-top:10px">
+        <div style="font-size:10px;font-weight:600;letter-spacing:1px;text-transform:uppercase;color:var(--mu);margin-bottom:4px">Why multiplicative, not logistic regression?</div>
+        <div class="why-row"><strong>Independence:</strong> Geography, press, and balance are approximately orthogonal — their effects multiply, not add. A free shot from Zone 14 is not dangerous even with 11 attackers.</div>
+        <div class="why-row"><strong>Interpretability:</strong> Coaching staff can understand "Zone 1 base × press penalty × balance boost" immediately. Logistic regression coefficients require more context.</div>
+        <div class="why-row"><strong>Updatable:</strong> When new zone data arrives, update one number. Regression requires full retraining.</div>
+        <div class="why-row"><strong>Constraint-safe:</strong> Product stays in [0,1] without additional sigmoid transformation needed.</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- end left -->
+
+<!-- ══════════════════ RIGHT PANEL ══════════════════ -->
+<div class="right">
+
+  <div class="sec-label">Enter your situation manually</div>
+
+  <form method="POST" action="/predict" id="xgForm">
+
+    <div class="field">
+      <label>Zone <span class="hint">1 = near goal · 14 = own half</span></label>
+      <input type="number" name="zone" id="inp-zone" min="1" max="14" placeholder="1–14"
+        value="{{ prev.zone if prev else '' }}"
+        class="{{ 'ei' if errors and errors.zone else '' }}"/>
+      {% if errors and errors.zone %}<div class="ferr">⚠ {{ errors.zone }}</div>{% endif %}
+      <div class="pills">
+        <div class="pill" onclick="fz(1)"><strong>1</strong>6-yd box</div>
+        <div class="pill" onclick="fz(2)"><strong>2</strong>Pen spot</div>
+        <div class="pill" onclick="fz(4)"><strong>4</strong>Near post</div>
+        <div class="pill" onclick="fz(7)"><strong>7</strong>Pen area</div>
+        <div class="pill" onclick="fz(10)"><strong>10</strong>Top of D</div>
+        <div class="pill" onclick="fz(13)"><strong>13</strong>Midfield</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Press Intensity <span class="hint">1 = free · 4 = 3+ defenders</span></label>
+      <input type="number" name="press" id="inp-press" min="1" max="4" placeholder="1–4"
+        value="{{ prev.press if prev else '' }}"
+        class="{{ 'ei' if errors and errors.press else '' }}"/>
+      {% if errors and errors.press %}<div class="ferr">⚠ {{ errors.press }}</div>{% endif %}
+      <div class="pills">
+        <div class="pill" onclick="fp(1)"><strong>1</strong>No defenders</div>
+        <div class="pill" onclick="fp(2)"><strong>2</strong>1 defender</div>
+        <div class="pill" onclick="fp(3)"><strong>3</strong>2 defenders</div>
+        <div class="pill" onclick="fp(4)"><strong>4</strong>3+ defenders</div>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:18px">
+      <label>Degree of Balance <span class="hint">1 = isolated · 4 = overload</span></label>
+      <input type="number" name="balance" id="inp-balance" min="1" max="4" placeholder="1–4"
+        value="{{ prev.balance if prev else '' }}"
+        class="{{ 'ei' if errors and errors.balance else '' }}"/>
+      {% if errors and errors.balance %}<div class="ferr">⚠ {{ errors.balance }}</div>{% endif %}
+      <div class="pills">
+        <div class="pill" onclick="fb(1)"><strong>1</strong>0–1 att</div>
+        <div class="pill" onclick="fb(2)"><strong>2</strong>2–5 att</div>
+        <div class="pill" onclick="fb(3)"><strong>3</strong>6–8 att</div>
+        <div class="pill" onclick="fb(4)"><strong>4</strong>9–11 att</div>
+      </div>
+    </div>
+
+    <button type="submit" class="submit">CALCULATE xG →</button>
+  </form>
+
+  <!-- RESULT -->
+  {% if result %}
+  <div class="result-card" style="--rc:{{ result.color }}">
+    <div style="font-size:10px;letter-spacing:1.5px;text-transform:uppercase;color:var(--mu);margin-bottom:8px">Expected Goals (xG)</div>
+    <div class="xg-num">{{ "%.3f"|format(result.xg) }}</div>
+    <div class="xg-rating">{{ result.rating }}</div>
+    <div class="xg-bar-bg"><div class="xg-bar-fill" style="width:{{ (result.xg*100)|round|int }}%"></div></div>
+  </div>
+
+  <div class="bk">
+    <div class="bk-row">
+      <div class="bk-tag">Zone</div>
+      <div><div class="bk-main">Zone {{ result.zone }}</div><div class="bk-sub">{{ result.zone_name }}</div></div>
+      <div class="bk-val">{{ "%.2f"|format(result.base_xg) }}</div>
+    </div>
+    <div class="bk-row">
+      <div class="bk-tag">Press</div>
+      <div><div class="bk-main">Level {{ result.press }}</div><div class="bk-sub">{{ result.press_label }}</div></div>
+      <div class="bk-val">×{{ "%.2f"|format(result.press_mult) }}</div>
+    </div>
+    <div class="bk-row">
+      <div class="bk-tag">Balance</div>
+      <div><div class="bk-main">Level {{ result.balance }}</div><div class="bk-sub">{{ result.balance_label }}</div></div>
+      <div class="bk-val">×{{ "%.2f"|format(result.balance_mult) }}</div>
+    </div>
+  </div>
+
+  <div>
+    <div class="formula-lbl">Formula</div>
+    <div class="formula">{{ result.formula }}</div>
+  </div>
+  {% else %}
+  <div class="empty-state">
+    <div class="empty-big">xG</div>
+    <div class="empty-msg">Type zone (1–14), press (1–4), and balance (1–4)<br>above then click Calculate.</div>
+  </div>
+  {% endif %}
+
+  <!-- History -->
+  <div>
+    <div class="sec-label">Recent calculations</div>
+    <div class="hist-list" id="hist-list">
+      <div class="empty" id="hist-empty">No calculations yet</div>
+    </div>
+  </div>
+
+</div><!-- end right -->
+</div><!-- end page -->
+
+<script>
+// ── Zone definitions ──────────────────────────────────────
+const CW = 28, CH = 22;
+
+const ZC = {
+  1:'#7B1515', 2:'#C03820', 3:'#B84878', 4:'#6838A8',
+  5:'#C82898', 6:'#B05820', 7:'#38B050', 8:'#289840',
+  9:'#289840', 10:'#789028', 11:'#A0A018', 12:'#789028',
+  13:'#185850', 14:'#0E1C34'
+};
+
+const ZN = {
+  1:'Central 6-yard box', 2:'Penalty spot area',
+  3:'Upper near-post',    4:'Lower near-post',
+  5:'Top corner',         6:'Bottom corner',
+  7:'Central pen area',   8:'Upper pen area',
+  9:'Lower pen area',    10:'Top of the D',
+  11:'Upper outside box',12:'Lower outside box',
+  13:'Deep midfield',    14:'Own half'
+};
+
+const ZBX = {
+  1:0.42,2:0.23,3:0.13,4:0.13,5:0.07,6:0.07,
+  7:0.11,8:0.08,9:0.08,10:0.06,11:0.04,
+  12:0.04,13:0.02,14:0.01
+};
+
+// Zone label positions (gx, gy center)
+const ZLP = {
+  1:[19,8], 2:[16,8], 3:[18,3.5], 4:[18,13],
+  5:[19,0.7], 6:[19,15.3], 7:[13,8], 8:[13,3],
+  9:[13,13], 10:[7,8], 11:[7,2.5], 12:[7,13.5],
+  13:[2,8], 14:[1,8]
+};
+
+function getZone(gx, gy) {
+  if (gx<=1)  return 14;
+  if (gx<=3)  return 13;
+  if (gx<=10) return gy<=5?11 : gy>=11?12 : 10;
+  if (gx<=15) return gy<=5?8  : gy>=11?9  : 7;
+  if (gx<=17) return gy<=3?3  : gy>=13?4  : 2;
+  if (gy<=1)  return 5;
+  if (gy<=5)  return 3;
+  if (gy<=10) return 1;
+  if (gy<=14) return 4;
+  return 6;
+}
+
+const ns = 'http://www.w3.org/2000/svg';
+let selZone = {{ result.zone if result else 1 }};
+
+// ── Build pitch grid ──────────────────────────────────────
+function buildPitch() {
+  const gc = document.getElementById('grid-cells');
+  const zl = document.getElementById('zone-labels');
+
+  for (let gx=0; gx<=20; gx++) {
+    for (let gy=0; gy<=16; gy++) {
+      const z = getZone(gx, gy);
+      const x = gx*CW, y = gy*CH;
+
+      // Cell rect
+      const r = document.createElementNS(ns,'rect');
+      r.setAttribute('x', x); r.setAttribute('y', y);
+      r.setAttribute('width', CW); r.setAttribute('height', CH);
+      r.setAttribute('fill', ZC[z]);
+      r.setAttribute('stroke','rgba(0,0,0,0.25)');
+      r.setAttribute('stroke-width','0.5');
+      r.setAttribute('data-z', z); r.setAttribute('data-gx', gx); r.setAttribute('data-gy', gy);
+      r.style.cursor='pointer';
+      r.addEventListener('click', () => selectZoneFromPitch(z));
+      gc.appendChild(r);
+
+      // Coord label
+      const t = document.createElementNS(ns,'text');
+      t.setAttribute('x', x+CW/2); t.setAttribute('y', y+CH/2);
+      t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','central');
+      t.setAttribute('font-size','5.5');
+      t.setAttribute('fill','rgba(255,255,255,0.28)');
+      t.setAttribute('pointer-events','none');
+      t.setAttribute('font-family','DM Mono, monospace');
+      t.textContent = `${gx},${gy}`;
+      gc.appendChild(t);
+    }
+  }
+
+  // Zone number labels
+  for (const [z, [lgx, lgy]] of Object.entries(ZLP)) {
+    const lx = lgx*CW + CW/2;
+    const ly = lgy*CH + CH/2;
+    const t = document.createElementNS(ns,'text');
+    t.setAttribute('x', lx); t.setAttribute('y', ly);
+    t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','central');
+    t.setAttribute('font-size','16'); t.setAttribute('font-weight','700');
+    t.setAttribute('fill','rgba(255,255,255,0.85)');
+    t.setAttribute('font-family','Bebas Neue, sans-serif');
+    t.setAttribute('letter-spacing','1');
+    t.setAttribute('pointer-events','none');
+    t.textContent = z;
+    zl.appendChild(t);
+  }
+
+  buildLegend();
+  highlightZone(selZone);
+}
+
+// ── Highlight selected zone ───────────────────────────────
+function highlightZone(zone) {
+  const ov = document.getElementById('sel-overlay');
+  ov.innerHTML='';
+  for (let gx=0; gx<=20; gx++) {
+    for (let gy=0; gy<=16; gy++) {
+      if (getZone(gx,gy)===zone) {
+        const r = document.createElementNS(ns,'rect');
+        r.setAttribute('x', gx*CW+1); r.setAttribute('y', gy*CH+1);
+        r.setAttribute('width', CW-2); r.setAttribute('height', CH-2);
+        r.setAttribute('fill','none');
+        r.setAttribute('stroke','#a8ff47');
+        r.setAttribute('stroke-width','1.8');
+        r.setAttribute('rx','1');
+        r.setAttribute('pointer-events','none');
+        ov.appendChild(r);
+      }
+    }
+  }
+  selZone = zone;
+}
+
+// ── Zone click from pitch ─────────────────────────────────
+function selectZoneFromPitch(zone) {
+  document.getElementById('inp-zone').value = zone;
+  highlightZone(zone);
+  // Update zone name hint
+  const hint = document.querySelector('#inp-zone').closest('.field').querySelector('.hint');
+  if (hint) hint.textContent = `Zone ${zone} — ${ZN[zone]} (base xG: ${ZBX[zone]})`;
+}
+
+// ── Quick-fill helpers ────────────────────────────────────
+function fz(v) {
+  document.getElementById('inp-zone').value=v;
+  highlightZone(v);
+}
+function fp(v) { document.getElementById('inp-press').value=v; }
+function fb(v) { document.getElementById('inp-balance').value=v; }
+
+// ── Zone input sync → pitch highlight ────────────────────
+document.addEventListener('DOMContentLoaded',()=>{
+  buildPitch();
+  document.getElementById('inp-zone').addEventListener('input', function(){
+    const v = parseInt(this.value);
+    if (v>=1 && v<=14) highlightZone(v);
+  });
+  renderHistory();
+});
+
+// ── Legend ────────────────────────────────────────────────
+function buildLegend() {
+  const leg = document.getElementById('legend');
+  for (let z=1; z<=14; z++) {
+    const d = document.createElement('div');
+    d.className='leg-item';
+    d.onclick=()=>{ fz(z); };
+    d.innerHTML=`<div class="leg-dot" style="background:${ZC[z]}"></div><span>Z${z}</span>`;
+    d.title = ZN[z] + ' — base xG: ' + ZBX[z];
+    leg.appendChild(d);
+  }
+}
+
+// ── Approach accordion ────────────────────────────────────
+function toggleApproach() {
+  const b = document.getElementById('ap-body');
+  const t = document.getElementById('ap-tog');
+  b.classList.toggle('open');
+  t.style.transform = b.classList.contains('open') ? 'rotate(180deg)' : '';
+}
+
+// ── History ───────────────────────────────────────────────
+const HK = 'xg_hist_v2';
+function getHist() { try{return JSON.parse(sessionStorage.getItem(HK))||[];}catch{return [];} }
+function saveHist(e) { const h=getHist(); h.unshift(e); sessionStorage.setItem(HK,JSON.stringify(h.slice(0,20))); }
+
+function renderHistory() {
+  const hist = getHist();
+  const list = document.getElementById('hist-list');
+  const emp  = document.getElementById('hist-empty');
+  list.querySelectorAll('.hist-row').forEach(r=>r.remove());
+  if (!hist.length) { if(emp) emp.style.display='block'; return; }
+  if(emp) emp.style.display='none';
+  hist.forEach(h=>{
+    const row=document.createElement('div');
+    row.className='hist-row';
+    row.innerHTML=`<div class="hist-in">Z<span>${h.z}</span> &nbsp; P<span>${h.p}</span> &nbsp; B<span>${h.b}</span></div>
+      <div style="text-align:right"><div class="hist-xg" style="color:${h.c}">${parseFloat(h.xg).toFixed(3)}</div>
+      <div class="hist-r" style="color:${h.c}">${h.r}</div></div>`;
+    row.onclick=()=>{ fz(h.z); fp(h.p); fb(h.b); };
+    list.appendChild(row);
+  });
+}
+
+{% if result %}
+saveHist({z:{{result.zone}},p:{{result.press}},b:{{result.balance}},
+          xg:{{result.xg}},c:"{{result.color}}",r:"{{result.rating}}"});
+{% endif %}
+</script>
+</body>
+</html>
